@@ -2,7 +2,7 @@ var _user$project$Native_FileSystem = function() {
 
 const fs = require('fs');
 
-var listFiles = function(dir) {
+var readDirectory = function(dir) {
     return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
         fs.readdir(dir, function(error, data) {
             if (error) {
@@ -15,8 +15,32 @@ var listFiles = function(dir) {
     });
 }
 
+
+var fileType = ["IsFile", "IsDirectory", "Other"];
+var description = function(path) {
+    return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
+        fs.stat(path, function(error, stats) {
+            if (error) {
+                var msg = error.toString();
+                callback(_elm_lang$core$Native_Scheduler.fail(msg));
+                return;
+            }
+            var type = 2;
+            if (stats.isFile()) {
+                type = 0;
+            } else if (stats.isDirectory()) {
+                type = 1;
+            }
+            callback(_elm_lang$core$Native_Scheduler.succeed(
+                { type_: { ctor: fileType[type] } }
+            ));
+        });
+    });
+}
+
 return {
-	listFiles: listFiles,
+	readDirectory: readDirectory,
+    description: description
 };
 
 }();
