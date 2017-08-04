@@ -38,9 +38,27 @@ var description = function(path) {
     });
 }
 
+var readFile = function(options, path) {
+    return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
+        var encoding = null;
+        if (options._ctor == 'Just') {
+            encoding = options._1;
+        }
+        fs.readFile(path, encoding, function(error, data) {
+            if (error) {
+                var msg = error.toString();
+                callback(_elm_lang$core$Native_Scheduler.fail(msg));
+                return;
+            }
+            callback(_elm_lang$core$Native_Scheduler.succeed(data));
+        });
+    });
+}
+
 return {
 	readDirectory: readDirectory,
-    description: description
+    description: description,
+    readFile: F2(readFile)
 };
 
 }();

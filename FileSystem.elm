@@ -28,7 +28,21 @@ description =
     Native.FileSystem.description
 
 
-{-| TODO: returns error if symbolic link present
+type alias Options =
+    { encoding : Maybe String }
+
+
+readFileWith : Options -> String -> Task Error String
+readFileWith =
+    Native.FileSystem.readFile
+
+
+readFile : String -> Task Error String
+readFile =
+    readFileWith { encoding = Just "UTF8" }
+
+
+{-| TODO: returns error if symbolic link present, as fs.stat doesn't work on symbolic links
 -}
 listFiles : String -> Task Error (List String)
 listFiles dir =
