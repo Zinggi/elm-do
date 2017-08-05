@@ -41,8 +41,8 @@ var description = function(path) {
 var readFile = function(options, path) {
     return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
         var encoding = null;
-        if (options._ctor == 'Just') {
-            encoding = options._1;
+        if (options.encoding.ctor == 'Just') {
+            encoding = options.encoding._0;
         }
         fs.readFile(path, encoding, function(error, data) {
             if (error) {
@@ -50,6 +50,7 @@ var readFile = function(options, path) {
                 callback(_elm_lang$core$Native_Scheduler.fail(msg));
                 return;
             }
+
             callback(_elm_lang$core$Native_Scheduler.succeed(data));
         });
     });

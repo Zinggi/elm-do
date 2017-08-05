@@ -39,7 +39,7 @@ readFileWith =
 
 readFile : String -> Task Error String
 readFile =
-    readFileWith { encoding = Just "UTF8" }
+    readFileWith { encoding = Just "utf8" }
 
 
 {-| TODO: returns error if symbolic link present, as fs.stat doesn't work on symbolic links

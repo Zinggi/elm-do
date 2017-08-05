@@ -3,11 +3,11 @@ module Main exposing (main)
 import Html exposing (Html, program)
 import Element exposing (..)
 import Element.Events as E
-import Element.Attributes as A
 import Styles exposing (..)
 import Task
 import FileSystem exposing (listFiles, readFile)
 import Path.Posix exposing (joinPath)
+import IniParser exposing (parse)
 
 
 -- update
@@ -16,8 +16,7 @@ import Path.Posix exposing (joinPath)
 type Msg
     = SetQuery String
     | SelectEntry String
-    | DesktopEntries (Result FileSystem.Error (List String))
-    | GetFileContent (Result FileSystem.Error String)
+    | DesktopEntries (Result FileSystem.Error (List Entry))
 
 
 type alias Model =
@@ -25,43 +24,69 @@ type alias Model =
     , entries : List Entry
     , entriesToShow : Int
     , selectedEntry : Maybe String
-    , content : String
     }
 
 
 type alias Entry =
-    String
+    Result String IniParser.IniFile
 
 
 initModel : Model
 initModel =
     { query = ""
-    , entries = [ "test", "lol", "motherfucker", "etf", "loser", "hitler", "adolf" ]
+    , entries = []
     , entriesToShow = 5
     , selectedEntry = Nothing
-    , content = ""
     }
 
 
+listFilesFullPath : String -> Task.Task FileSystem.Error (List String)
+listFilesFullPath path =
+    listFiles path
+        |> Task.map (\names -> List.map (\name -> joinPath [ path, name ]) names)
+
+
+extractEntryFromFile : String -> Entry
+extractEntryFromFile content =
+    -- TODO: this should actualy parse the file into an entry
+    -- https://specifications.freedesktop.org/desktop-entry-spec/desktop-entry-spec-latest.html
+    parse content
+
+
+extractDesktopEntries : String -> Task.Task FileSystem.Error (List Entry)
+extractDesktopEntries path =
+    listFilesFullPath path
+        |> Task.andThen
+            (\files ->
+                files
+                    |> List.map
+                        (\file ->
+                            readFile file
+                                |> Task.map extractEntryFromFile
+                        )
+                    |> Task.sequence
+            )
+
+
+init : ( Model, Cmd Msg )
 init =
-    -- /usr/local/share/applications
-    -- ~/.local/share/applications
-    -- /usr/share/applications
     let
         path =
-            "/usr/share/applications"
+            -- "/usr/local/share/applications"
+            -- "~/.local/share/applications" -- needs more work, as ~ is a side effect
+            -- "/usr/share/applications"
+            "/usr/local/share/applications"
     in
         ( initModel
-        , Task.attempt DesktopEntries
-            (listFiles path
-                |> Task.map (\names -> List.map (\name -> joinPath [ path, name ]) names)
-            )
+        , Task.attempt DesktopEntries (extractDesktopEntries path)
         )
 
 
 filterEntries : String -> List Entry -> List Entry
 filterEntries query entries =
-    List.filter (String.toLower >> String.contains (String.toLower query)) entries
+    -- TODO: correct filtering
+    --List.filter (String.toLower >> String.contains (String.toLower query)) entries
+    entries
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -76,20 +101,13 @@ update msg ({ query, entries, entriesToShow } as model) =
         DesktopEntries res ->
             case res of
                 Ok files ->
-                    ( { model | entries = files }, Task.attempt GetFileContent (readFile (List.head files |> Maybe.withDefault "/")) )
+                    ( { model | entries = files }, Cmd.none )
 
                 Err err ->
                     Debug.crash err
 
-        GetFileContent res ->
-            case res of
-                Ok content ->
-                    ( { model | content = content }, Cmd.none )
 
-                Err error ->
-                    Debug.crash error
-
-
+subs : a -> Sub msg
 subs model =
     Sub.none
 
@@ -103,15 +121,16 @@ view model =
     viewport stylesheet (mainView model)
 
 
+mainView : Model -> Element Styles variation Msg
 mainView model =
     column None
         []
         [ inputText None [ E.onInput SetQuery ] model.query
         , viewList model.query model.entries
-        , text model.content
         ]
 
 
+viewList : String -> List Entry -> Element style variation msg
 viewList query entries =
     toString (filterEntries query entries)
         |> text
@@ -121,6 +140,7 @@ viewList query entries =
 -- main
 
 
+main : Program Never Model Msg
 main =
     program
         { init = init
