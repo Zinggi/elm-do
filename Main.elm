@@ -3,6 +3,7 @@ module Main exposing (main)
 import Html exposing (Html, program)
 import Element exposing (..)
 import Element.Events as E
+import Element.Attributes as A
 import Styles exposing (..)
 import Task
 
@@ -12,7 +13,7 @@ import Task
 import FileSystem exposing (listFiles, readFile)
 import Path.Posix exposing (joinPath)
 import IniParser exposing (parse)
-import DictDecoder exposing (decode, run, at, required, string)
+import DictDecoder exposing (decode, run, at, required, optional, string)
 
 
 -- update
@@ -34,7 +35,7 @@ type alias Model =
 
 
 type alias Entry =
-    { name : String, exec : String }
+    { name : String, exec : String, comment : String }
 
 
 initModel : Model
@@ -64,7 +65,8 @@ extractEntryFromFile content =
                     decoder =
                         decode Entry
                             |> required "Name" string
-                            |> required "Exec" string
+                            |> optional "Exec" string ""
+                            |> optional "Comment" string ""
 
                     -- [Desktop Entry]
                     -- Type=Application
@@ -86,10 +88,17 @@ extractDesktopEntries path =
         |> Task.andThen
             (\files ->
                 files
+                    |> List.filter (String.endsWith ".desktop")
                     |> List.map
                         (\file ->
                             readFile file
                                 |> Task.map extractEntryFromFile
+                                |> Task.map
+                                    (Result.mapError
+                                        (\err ->
+                                            "Error in file: '" ++ file ++ "':\n" ++ err
+                                        )
+                                    )
                         )
                     |> Task.sequence
             )
@@ -100,8 +109,8 @@ init =
     let
         path =
             -- "~/.local/share/applications" -- needs more work, as ~ is a side effect
-            -- "/usr/share/applications"
-            "/usr/local/share/applications"
+            -- "/usr/local/share/applications"
+            "/usr/share/applications"
     in
         ( initModel
         , Task.attempt DesktopEntries (extractDesktopEntries path)
@@ -111,7 +120,13 @@ init =
 filterEntries : String -> List Entry -> List Entry
 filterEntries query entries =
     -- TODO: correct filtering
-    List.filter (.name >> String.toLower >> String.contains (String.toLower query)) entries
+    List.filter
+        (\entry ->
+            String.toLower entry.name
+                |> String.contains (String.toLower query)
+                |> (||) (String.toLower entry.comment |> String.contains (String.toLower query))
+        )
+        entries
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -160,7 +175,7 @@ view model =
     viewport stylesheet (mainView model)
 
 
-mainView : Model -> Element Styles variation Msg
+mainView : Model -> Element Styles Variations Msg
 mainView model =
     column None
         []
@@ -170,20 +185,21 @@ mainView model =
         ]
 
 
-viewList : String -> List Entry -> Element Styles variation msg
+viewList : String -> List Entry -> Element Styles Variations msg
 viewList query entries =
     column None
         []
         (filterEntries query entries
             |> List.map
                 (\entry ->
-                    row None
+                    row Styles.Entry
                         []
-                        [ circle 10 None [] (text "")
+                        [ circle 10 None [ A.vary Selected True ] (text "")
                         , column None
                             []
                             [ bold entry.name
-                            , text entry.exec
+                            , italic entry.exec
+                            , text entry.comment
                             ]
                         ]
                 )

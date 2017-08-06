@@ -39,6 +39,7 @@ parse text =
 file : Parser IniFile
 file =
     succeed Dict.fromList
+        |. repeat zeroOrMore ignoredStuff
         |= repeat zeroOrMore
             (section
                 |. (repeat zeroOrMore ignoredStuff)
