@@ -5,8 +5,6 @@ import Element exposing (..)
 import Element.Events as E
 import Styles exposing (..)
 import Task
-import Dict
-import Result.Extra as Result
 
 
 --
@@ -168,6 +166,7 @@ mainView model =
         []
         [ inputText None [ E.onInput SetQuery ] model.query
         , viewList model.query model.entries
+        , (toString >> text) model.errors
         ]
 
 

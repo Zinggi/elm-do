@@ -31,7 +31,10 @@ type alias Value =
     String
 
 
-parse : String -> Result String IniFile
+
+-- parse : String -> Result String IniFile
+
+
 parse text =
     Parser.run file text
         |> Result.mapError toString
@@ -40,20 +43,24 @@ parse text =
 file : Parser IniFile
 file =
     succeed Dict.fromList
-        |= repeat zeroOrMore section
-        |. (repeat zeroOrMore ignoredStuff)
+        |= repeat zeroOrMore
+            (section
+                |. (repeat zeroOrMore ignoredStuff)
+            )
         |. end
 
 
 section : Parser ( SectionHeader, Dict Key Value )
 section =
-    succeed (\h kvs -> ( h, Dict.fromList kvs ))
-        |. (repeat zeroOrMore ignoredStuff)
-        |= sectionHeader
-        |. (repeat zeroOrMore ignoredStuff)
-        |= repeat zeroOrMore
-            (keyValue
-                |. (repeat zeroOrMore ignoredStuff)
+    inContext "section" <|
+        delayedCommitMap (\h kvs -> ( h, Dict.fromList kvs ))
+            (sectionHeader
+                |. repeat oneOrMore ignoredStuff
+            )
+            (repeat zeroOrMore
+                (keyValue
+                    |. repeat zeroOrMore ignoredStuff
+                )
             )
 
 
@@ -74,7 +81,9 @@ isSpace c =
 
 key : Parser Key
 key =
-    keep (oneOrMore) (\c -> c /= ' ' && c /= '\t' && c /= '\n' && c /= '\n' && c /= '=')
+    succeed (++)
+        |= keep (Exactly 1) (\c -> c /= '[')
+        |= keep (zeroOrMore) (\c -> c /= ' ' && c /= '\t' && c /= '\n' && c /= '\n' && c /= '=')
 
 
 value : Parser Value
@@ -86,22 +95,27 @@ value =
 -}
 keyValue : Parser ( Key, Value )
 keyValue =
-    succeed (,)
-        |= key
-        |. spaces
-        |. symbol "="
-        |. spaces
-        |= value
+    inContext "key-value pair" <|
+        delayedCommitMap (,)
+            key
+            (succeed identity
+                |. spaces
+                |. symbol "="
+                |. spaces
+                |= value
+            )
 
 
 {-| [section]
 -}
 sectionHeader : Parser SectionHeader
 sectionHeader =
-    succeed identity
-        |. symbol "["
-        |= sectionHeaderText
-        |. symbol "]"
+    inContext "sectionHeader" <|
+        delayedCommit (symbol "[")
+            (succeed identity
+                |= sectionHeaderText
+                |. symbol "]"
+            )
 
 
 ignoredStuff : Parser ()
