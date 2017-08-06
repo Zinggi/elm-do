@@ -4,7 +4,6 @@ module IniParser exposing (..)
 -}
 
 import Parser exposing (..)
-import Char
 import Dict exposing (Dict)
 
 
@@ -31,10 +30,7 @@ type alias Value =
     String
 
 
-
--- parse : String -> Result String IniFile
-
-
+parse : String -> Result String IniFile
 parse text =
     Parser.run file text
         |> Result.mapError toString

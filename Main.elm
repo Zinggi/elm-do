@@ -100,8 +100,8 @@ init =
     let
         path =
             -- "~/.local/share/applications" -- needs more work, as ~ is a side effect
-            -- "/usr/local/share/applications"
-            "/usr/share/applications"
+            -- "/usr/share/applications"
+            "/usr/local/share/applications"
     in
         ( initModel
         , Task.attempt DesktopEntries (extractDesktopEntries path)

@@ -1,10 +1,10 @@
-const _user$project$Native_FileSystem = function() {
+const _user$project$Native_FileSystem = (() => {
 
 const fs = require('fs');
 
-const readDirectory = function(dir) {
-    return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
-        fs.readdir(dir, function(error, data) {
+const readDirectory = (dir) => {
+    return _elm_lang$core$Native_Scheduler.nativeBinding((callback) => {
+        fs.readdir(dir, (error, data) => {
             if (error) {
                 const msg = error.toString();
                 callback(_elm_lang$core$Native_Scheduler.fail(msg));
@@ -17,9 +17,9 @@ const readDirectory = function(dir) {
 
 
 const fileType = ["IsFile", "IsDirectory", "Other"];
-const description = function(path) {
-    return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
-        fs.stat(path, function(error, stats) {
+const description = (path) => {
+    return _elm_lang$core$Native_Scheduler.nativeBinding((callback) => {
+        fs.stat(path, (error, stats) => {
             if (error) {
                 const msg = error.toString();
                 callback(_elm_lang$core$Native_Scheduler.fail(msg));
@@ -38,13 +38,13 @@ const description = function(path) {
     });
 }
 
-const readFile = function(options, path) {
-    return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
+const readFile = (options, path) => {
+    return _elm_lang$core$Native_Scheduler.nativeBinding((callback) => {
         let encoding = null;
         if (options.encoding.ctor == 'Just') {
             encoding = options.encoding._0;
         }
-        fs.readFile(path, encoding, function(error, data) {
+        fs.readFile(path, encoding, (error, data) => {
             if (error) {
                 const msg = error.toString();
                 callback(_elm_lang$core$Native_Scheduler.fail(msg));
@@ -62,4 +62,4 @@ return {
     readFile: F2(readFile)
 };
 
-}();
+})();
