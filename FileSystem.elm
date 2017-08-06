@@ -58,6 +58,8 @@ listFiles dir =
             )
 
 
+{-| like sequence, but only keep an item if (f a)
+-}
 taskFilter : (a -> Task err Bool) -> List a -> Task err (List a)
 taskFilter f list =
     list
