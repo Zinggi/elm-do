@@ -21,7 +21,6 @@ import DictDecoder exposing (decode, run, at, required, optional, string)
 
 type Msg
     = SetQuery String
-    | SelectEntry String
     | DesktopEntries (Result FileSystem.Error (List (Result String Entry)))
 
 
@@ -30,7 +29,7 @@ type alias Model =
     , entries : List Entry
     , errors : List String
     , entriesToShow : Int
-    , selectedEntry : Maybe String
+    , selectedEntry : Int
     }
 
 
@@ -44,7 +43,7 @@ initModel =
     , entries = []
     , errors = []
     , entriesToShow = 5
-    , selectedEntry = Nothing
+    , selectedEntry = 0
     }
 
 
@@ -109,8 +108,8 @@ init =
     let
         path =
             -- "~/.local/share/applications" -- needs more work, as ~ is a side effect
-            -- "/usr/local/share/applications"
-            "/usr/share/applications"
+            -- "/usr/share/applications"
+            "/usr/local/share/applications"
     in
         ( initModel
         , Task.attempt DesktopEntries (extractDesktopEntries path)
@@ -133,10 +132,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ query, entries, entriesToShow } as model) =
     case msg of
         SetQuery newQuery ->
-            ( { model | query = newQuery }, Cmd.none )
-
-        SelectEntry id ->
-            ( { model | selectedEntry = Just id, query = id }, Cmd.none )
+            ( { model | query = newQuery, selectedEntry = 0 }, Cmd.none )
 
         DesktopEntries res ->
             case res of
@@ -180,21 +176,21 @@ mainView model =
     column None
         []
         [ inputText None [ E.onInput SetQuery ] model.query
-        , viewList model.query model.entries
+        , viewList model.query model.selectedEntry model.entries
         , (toString >> text) model.errors
         ]
 
 
-viewList : String -> List Entry -> Element Styles Variations msg
-viewList query entries =
-    column None
+viewList : String -> Int -> List Entry -> Element Styles Variations msg
+viewList query selection entries =
+    column Base
         []
         (filterEntries query entries
-            |> List.map
-                (\entry ->
+            |> List.indexedMap
+                (\i entry ->
                     row Styles.Entry
-                        []
-                        [ circle 10 None [ A.vary Selected True ] (text "")
+                        [ A.vary Selected (selection == i) ]
+                        [ circle 10 None [] (text "")
                         , column None
                             []
                             [ bold entry.name
@@ -203,6 +199,7 @@ viewList query entries =
                             ]
                         ]
                 )
+            |> List.intersperse (hairline None)
         )
 
 

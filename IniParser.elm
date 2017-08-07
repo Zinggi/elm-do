@@ -80,7 +80,7 @@ key : Parser Key
 key =
     succeed (++)
         |= keep (Exactly 1) (\c -> c /= '[')
-        |= keep (zeroOrMore) (\c -> c /= ' ' && c /= '\t' && c /= '\n' && c /= '\n' && c /= '=')
+        |= keep (zeroOrMore) (\c -> c /= ' ' && c /= '\t' && c /= '\n' && c /= '=')
 
 
 value : Parser Value
