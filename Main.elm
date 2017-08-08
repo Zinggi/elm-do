@@ -6,12 +6,19 @@ import Element.Events as E
 import Element.Attributes as A
 import Styles exposing (..)
 import Task
+import Keyboard
+import Keyboard.Key exposing (fromCode, Key(Enter))
+import Path.Posix exposing (joinPath)
 
 
 --
 
 import FileSystem exposing (listFiles, readFile)
-import Path.Posix exposing (joinPath)
+import ChildProcess exposing (executeCommand)
+
+
+--
+
 import IniParser exposing (parse)
 import DictDecoder exposing (decode, run, at, required, optional, string)
 
@@ -22,15 +29,26 @@ import DictDecoder exposing (decode, run, at, required, optional, string)
 type Msg
     = SetQuery String
     | DesktopEntries (Result FileSystem.Error (List (Result String Entry)))
+    | KeyDown Keyboard.KeyCode
 
 
 type alias Model =
     { query : String
+
+    -- TODO: this shouldn't be a list.
+    -- There should always be a fallback option, e.g. search on google
+    -- this would make the selection easier, as there would always be a selected entry
     , entries : List Entry
     , errors : List String
     , entriesToShow : Int
-    , selectedEntry : Int
+    , selectedEntry : Selection
     }
+
+
+type Selection
+    = Fallback String
+    | AnEntry Entry
+    | EmptyQuery
 
 
 type alias Entry =
@@ -43,7 +61,7 @@ initModel =
     , entries = []
     , errors = []
     , entriesToShow = 5
-    , selectedEntry = 0
+    , selectedEntry = EmptyQuery
     }
 
 
@@ -103,6 +121,23 @@ extractDesktopEntries path =
             )
 
 
+startApp : Selection -> Cmd Msg
+startApp selection =
+    case selection of
+        AnEntry e ->
+            -- TODO: make it a Task Error () and handle error
+            Task.attempt identity (executeCommand e.exec)
+                |> Cmd.map (\_ -> KeyDown -1)
+
+        Fallback cmd ->
+            -- TODO: should provide options, e.g. google, cmd, etc..
+            Task.attempt identity (executeCommand cmd)
+                |> Cmd.map (\_ -> KeyDown -1)
+
+        _ ->
+            Cmd.none
+
+
 init : ( Model, Cmd Msg )
 init =
     let
@@ -129,10 +164,31 @@ filterEntries query entries =
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ query, entries, entriesToShow } as model) =
+update msg ({ query, entries, entriesToShow, selectedEntry } as model) =
     case msg of
-        SetQuery newQuery ->
-            ( { model | query = newQuery, selectedEntry = 0 }, Cmd.none )
+        SetQuery query ->
+            let
+                newSelectedEntry =
+                    filterEntries query entries
+                        |> List.head
+                        |> Maybe.map AnEntry
+                        |> Maybe.withDefault
+                            (if query == "" then
+                                EmptyQuery
+                             else
+                                Fallback query
+                            )
+            in
+                ( { model | query = query, selectedEntry = newSelectedEntry }, Cmd.none )
+
+        KeyDown code ->
+            case fromCode code of
+                Enter ->
+                    -- start app
+                    ( model, startApp selectedEntry )
+
+                _ ->
+                    ( model, Cmd.none )
 
         DesktopEntries res ->
             case res of
@@ -157,9 +213,9 @@ update msg ({ query, entries, entriesToShow } as model) =
                     Debug.crash err
 
 
-subs : a -> Sub msg
+subs : a -> Sub Msg
 subs model =
-    Sub.none
+    Keyboard.downs KeyDown
 
 
 
@@ -181,15 +237,15 @@ mainView model =
         ]
 
 
-viewList : String -> Int -> List Entry -> Element Styles Variations msg
+viewList : String -> Selection -> List Entry -> Element Styles Variations msg
 viewList query selection entries =
     column Base
         []
         (filterEntries query entries
-            |> List.indexedMap
-                (\i entry ->
+            |> List.map
+                (\entry ->
                     row Styles.Entry
-                        [ A.vary Selected (selection == i) ]
+                        [ A.vary Selected (selection == AnEntry entry) ]
                         [ circle 10 None [] (text "")
                         , column None
                             []
