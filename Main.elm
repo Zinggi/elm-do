@@ -7,7 +7,7 @@ import Element.Attributes as A
 import Styles exposing (..)
 import Task
 import Keyboard
-import Keyboard.Key exposing (fromCode, Key(Enter))
+import Keyboard.Key exposing (fromCode, Key(Enter, Down, Up))
 import Path.Posix exposing (joinPath)
 
 
@@ -21,6 +21,19 @@ import ChildProcess exposing (executeCommand)
 
 import IniParser exposing (parse)
 import DictDecoder exposing (decode, run, at, required, optional, string)
+import EntryList
+    exposing
+        ( EntryList
+        , Entry
+        , makeEntryList
+        , mapWithPosition
+        , selectPrevious
+        , selectNext
+        , selectedEntry
+        , setQuery
+        , getQuery
+        , updateEntries
+        )
 
 
 -- update
@@ -33,35 +46,20 @@ type Msg
 
 
 type alias Model =
-    { query : String
-
-    -- TODO: this shouldn't be a list.
-    -- There should always be a fallback option, e.g. search on google
-    -- this would make the selection easier, as there would always be a selected entry
-    , entries : List Entry
+    { entries : EntryList
     , errors : List String
-    , entriesToShow : Int
-    , selectedEntry : Selection
     }
 
 
-type Selection
-    = Fallback String
-    | AnEntry Entry
-    | EmptyQuery
-
-
-type alias Entry =
-    { name : String, exec : String, comment : String }
+cmdFallback : String -> Entry
+cmdFallback query =
+    { name = "Cmd", exec = query, comment = "> " ++ query }
 
 
 initModel : Model
 initModel =
-    { query = ""
-    , entries = []
+    { entries = makeEntryList cmdFallback [] []
     , errors = []
-    , entriesToShow = 5
-    , selectedEntry = EmptyQuery
     }
 
 
@@ -80,10 +78,13 @@ extractEntryFromFile content =
             (\dict ->
                 let
                     decoder =
-                        decode Entry
-                            |> required "Name" string
-                            |> optional "Exec" string ""
-                            |> optional "Comment" string ""
+                        decode identity
+                            |> required "Desktop Entry"
+                                (decode EntryList.Entry
+                                    |> required "Name" string
+                                    |> optional "Exec" string ""
+                                    |> optional "Comment" string ""
+                                )
 
                     -- [Desktop Entry]
                     -- Type=Application
@@ -95,7 +96,7 @@ extractEntryFromFile content =
                     -- MimeType=image/x-foo;
                     -- Actions=Gallery;Create;
                 in
-                    run (at "Desktop Entry" decoder) dict
+                    run decoder dict
             )
 
 
@@ -121,21 +122,11 @@ extractDesktopEntries path =
             )
 
 
-startApp : Selection -> Cmd Msg
-startApp selection =
-    case selection of
-        AnEntry e ->
-            -- TODO: make it a Task Error () and handle error
-            Task.attempt identity (executeCommand e.exec)
-                |> Cmd.map (\_ -> KeyDown -1)
-
-        Fallback cmd ->
-            -- TODO: should provide options, e.g. google, cmd, etc..
-            Task.attempt identity (executeCommand cmd)
-                |> Cmd.map (\_ -> KeyDown -1)
-
-        _ ->
-            Cmd.none
+startApp : Entry -> Cmd Msg
+startApp entry =
+    -- TODO: make it a Task Error () and handle error
+    Task.attempt identity (executeCommand entry.exec)
+        |> Cmd.map (\_ -> KeyDown -1)
 
 
 init : ( Model, Cmd Msg )
@@ -143,8 +134,8 @@ init =
     let
         path =
             -- "~/.local/share/applications" -- needs more work, as ~ is a side effect
-            -- "/usr/share/applications"
-            "/usr/local/share/applications"
+            -- "/usr/local/share/applications"
+            "/usr/share/applications"
     in
         ( initModel
         , Task.attempt DesktopEntries (extractDesktopEntries path)
@@ -164,28 +155,22 @@ filterEntries query entries =
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ query, entries, entriesToShow, selectedEntry } as model) =
+update msg ({ entries } as model) =
     case msg of
         SetQuery query ->
-            let
-                newSelectedEntry =
-                    filterEntries query entries
-                        |> List.head
-                        |> Maybe.map AnEntry
-                        |> Maybe.withDefault
-                            (if query == "" then
-                                EmptyQuery
-                             else
-                                Fallback query
-                            )
-            in
-                ( { model | query = query, selectedEntry = newSelectedEntry }, Cmd.none )
+            ( { model | entries = EntryList.setQuery filterEntries query entries }, Cmd.none )
 
         KeyDown code ->
             case fromCode code of
                 Enter ->
                     -- start app
-                    ( model, startApp selectedEntry )
+                    ( model, startApp (selectedEntry entries) )
+
+                Up ->
+                    ( { model | entries = selectPrevious model.entries }, Cmd.none )
+
+                Down ->
+                    ( { model | entries = selectNext model.entries }, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -207,7 +192,7 @@ update msg ({ query, entries, entriesToShow, selectedEntry } as model) =
                                 ( [], [] )
                                 files
                     in
-                        ( { model | entries = entries, errors = errors }, Cmd.none )
+                        ( { model | entries = updateEntries entries model.entries, errors = errors }, Cmd.none )
 
                 Err err ->
                     Debug.crash err
@@ -231,21 +216,21 @@ mainView : Model -> Element Styles Variations Msg
 mainView model =
     column None
         []
-        [ inputText None [ E.onInput SetQuery ] model.query
-        , viewList model.query model.selectedEntry model.entries
+        [ inputText None [ E.onInput SetQuery ] (getQuery model.entries)
+        , viewList model.entries
         , (toString >> text) model.errors
         ]
 
 
-viewList : String -> Selection -> List Entry -> Element Styles Variations msg
-viewList query selection entries =
+viewList : EntryList -> Element Styles Variations msg
+viewList entries =
     column Base
         []
-        (filterEntries query entries
-            |> List.map
-                (\entry ->
+        (entries
+            |> mapWithPosition
+                (\isSelected entry ->
                     row Styles.Entry
-                        [ A.vary Selected (selection == AnEntry entry) ]
+                        [ A.vary Selected isSelected ]
                         [ circle 10 None [] (text "")
                         , column None
                             []
