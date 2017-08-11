@@ -1,50 +1,96 @@
 module DictDecoder exposing (..)
 
+{-|
+
+
+# Dict Decoder
+
+Allows to decode nested `Dict`s into a more structured elm datastructure.
+
+
+## Example
+
+    import Dict exposing (Dict)
+    import DictDecoder exposing (DictDecoder, required, optional, float, int)
+
+    exampleDecoder : DictDecoder ( Float, Int )
+    exampleDecoder =
+        decode (,)
+            |> required "test" float
+            |> optional "opt" int 0
+
+
+    Dict.fromList [ ( "test", "-11.23" ), ( "opt", "20" ), ( "bla", "aasa" ) ]
+        |> run exampleDecoder
+
+    --> (-11.23, 20)
+
+-}
+
 import Dict exposing (Dict)
 import Json.Decode as JD
 import GeneralDecoder as GD exposing (..)
 
 
-decode : b -> Decoder a b
+type alias ValueDecoder value =
+    Decoder String String value
+
+
+type alias DictDecoder comparable value target =
+    Decoder String (Dict comparable value) target
+
+
+decode : target -> Decoder String source target
 decode =
     GD.decode
 
 
-run : Decoder a b -> a -> Result String b
+run : Decoder String source target -> source -> Result String target
 run =
     GD.run
 
 
-float : Decoder String Float
+float : ValueDecoder Float
 float =
     JD.decodeString JD.float
 
 
-int : Decoder String Int
+int : ValueDecoder Int
 int =
     JD.decodeString JD.int
 
 
-string : Decoder String String
-string =
+{-| Decodes some text.
+If you want to only decode text inside quotes, see `string`
+This decoder never fails.
+
+    run text "some text"
+    --> Ok "some text"
+
+-}
+text : ValueDecoder String
+text =
     Ok
 
 
-example =
-    Dict.fromList [ ( "test", "-11.23" ), ( "opt", "20" ), ( "bla", "aasa" ) ]
-        |> run exampleDecoder
+{-| Decodes a string.
+Needs to be in double quotes.
+For bare words, see `text`
 
+    run string "\"some string\""
+    --> Ok "some string"
 
-exampleDecoder : Decoder (Dict String String) ( Float, Int )
-exampleDecoder =
-    decode (,)
-        |> required "test" float
-        |> optional "opt" int 0
+    run string "'single quotes'"
+    --> Err "TODO"
 
-
-{-| -required : comparable -> Decoder a b -> Decoder (Dict comparable a) (b -> c) -> Decoder (Dict comparable b) c
 -}
-at : comparable -> Decoder a value -> Decoder (Dict comparable a) value
+string : ValueDecoder String
+string =
+    JD.decodeString JD.string
+
+
+{-| -}
+at : comparable -> Decoder String source target -> DictDecoder comparable source target
 at key valDecoder =
     (\dict ->
         case Dict.get key dict of
@@ -60,12 +106,13 @@ at key valDecoder =
     )
 
 
-required : comparable -> Decoder a value -> Decoder (Dict comparable a) (value -> b) -> Decoder (Dict comparable a) b
+{-| -}
+required : comparable -> Decoder String source target -> DictDecoder comparable source (target -> b) -> DictDecoder comparable source b
 required key valDecoder =
     custom (at key valDecoder)
 
 
-optional : comparable -> Decoder value a -> a -> Decoder (Dict comparable value) (a -> b) -> Decoder (Dict comparable value) b
+optional : comparable -> Decoder String source target -> target -> DictDecoder comparable source (target -> b) -> DictDecoder comparable source b
 optional key valDecoder defaultValue =
     custom
         (at key identityDecoder
